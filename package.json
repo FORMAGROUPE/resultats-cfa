@@ -1,0 +1,12 @@
+{
+  "name": "resultats-cfa-eformacampus",
+  "private": true,
+  "type": "module",
+  "description": "Page publique des indicateurs de résultats du CFA E-FORMA CAMPUS, alimentée par Notion",
+  "scripts": {
+    "notion": "node scripts/fetch-notion.mjs",
+    "build": "node scripts/build.mjs data/resultats.json",
+    "apercu": "node scripts/build.mjs data/exemple.json"
+  },
+  "engines": { "node": ">=20" }
+}
