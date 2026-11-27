@@ -26,7 +26,12 @@ function detail(t, ind) {
 
 const lignes = (data.lignes || []).filter(l => l.publier !== false && l.formation);
 const sessions = [...new Set(lignes.map(l => l.session || "Session non renseignée"))].sort().reverse();
-const nd = (data.nonDiplomantes || []).filter(l => l.publier !== false && l.formation);
+const nd = (data.nonDiplomantes || []).filter(l => l.publier !== false && l.formation).map(l => ({
+  ...l,
+  formation: l.formation.trim(),
+  // Sans colonne « Stagiaires entrés », l'effectif retenu est celui des candidats inscrits à la certification.
+  entres: typeof l.entres === "number" ? l.entres : (typeof l.inscritsCertif === "number" ? l.inscritsCertif : null),
+}));
 const annees = [...new Set(nd.map(l => l.annee || "Année non renseignée"))].sort().reverse();
 const majIso = [...lignes, ...nd].map(l => l.derniereModification).filter(Boolean).sort().pop() || data.extraitLe || new Date().toISOString();
 
@@ -166,20 +171,53 @@ function noteMoyenne(ls) {
   return n ? { valeur: s / n, n } : null;
 }
 
+// L'année la plus récente disposant de résultats reste dépliée, même si une année en cours la précède.
+const premiereAnneeComplete = annees.find(an => nd.some(l => (l.annee || "Année non renseignée") === an && (typeof l.satRecus === "number" || typeof l.certifies === "number" || typeof l.heuresRealisees === "number")));
+
 function blocND(annee, idx) {
   const ls = nd.filter(l => (l.annee || "Année non renseignée") === annee)
     .sort((a, b) => (a.ordre ?? 999) - (b.ordre ?? 999) || a.formation.localeCompare(b.formation, "fr"));
   const certif = ls.filter(estCertifiante);
   const note = noteMoyenne(ls);
-  const tuileND = (k, label, base = ls) => { const ind = byKey["nd:" + k]; const t = taux(base, ind); return tuile(t ? pct(t.valeur) : "–", label || ind.label, t ? detail(t, ind) : "Donnée non disponible"); };
-  const lignesTab = ls.map(l => {
-    const metiers = (l.metiersVises || "").split(/\n|;/).map(s => s.trim()).filter(Boolean);
-    const fiche = l.codeFiche ? (l.lienFiche ? `<a href="${esc(l.lienFiche)}" target="_blank" rel="noopener">${esc(l.codeFiche)} <i class="bx bx-link-external"></i></a>` : esc(l.codeFiche)) : "";
-    const ins = estCertifiante(l)
+  const a = k => taux(ls, byKey["nd:" + k]);
+  // Une colonne ou une tuile n'apparaît que si au moins une formation de l'année a la donnée.
+  const cols = [
+    { titre: "Stagiaires", ok: ls.some(l => l.entres != null || l.enCours),
+      td: l => l.entres == null && l.enCours
+        ? `<td><span class="rc-val">${nb(l.enCours)}</span><br><span class="rc-det">en cours de formation</span></td>`
+        : `<td><span class="rc-val">${l.entres != null ? nb(l.entres) : "–"}</span>${l.enCours ? `<br><span class="rc-det">dont ${nb(l.enCours)} en cours</span>` : ""}</td>` },
+    { titre: "Satisfaction", ok: !!a("satisfaction"), td: l => celluleND(l, "satisfaction") },
+    { titre: "Note de satisfaction", ok: !!note,
+      td: l => `<td>${typeof l.noteSatisfaction === "number" ? `<span class="rc-val">${l.noteSatisfaction.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}/10</span>` : `<span class="rc-nd">n.d.</span>`}</td>` },
+    { titre: "Retour questionnaires", ok: !!a("retourSat"), td: l => celluleND(l, "retourSat") },
+    { titre: "Réalisation des heures", ok: !!a("realisation"), td: l => celluleND(l, "realisation") },
+    { titre: "Abandon", ok: !!a("abandon"), td: l => celluleND(l, "abandon") },
+    { titre: "Présentation certification", ok: certif.length > 0, td: l => celluleND(l, "presentation") },
+    { titre: "Obtention certification", ok: certif.length > 0, td: l => celluleND(l, "obtention") },
+    { titre: "Insertion des titulaires", ok: certif.length > 0, td: l => estCertifiante(l)
       ? (l.insertionFiche != null || l.insertionMetierFiche != null
           ? `<td>${l.insertionFiche != null ? `Global : <span class="rc-val">${pct(l.insertionFiche / 100)}</span>` : ""}${l.insertionMetierFiche != null ? `<br>Métier visé : <span class="rc-val">${pct(l.insertionMetierFiche / 100)}</span>` : ""}<br><span class="rc-det">Source : fiche France compétences</span></td>`
           : `<td><span class="rc-nd">n.d.</span></td>`)
-      : `<td class="rc-so">Sans objet</td>`;
+      : `<td class="rc-so">Sans objet</td>` },
+  ].filter(c => c.ok);
+
+  const tuileSi = (t, ind, label) => t ? tuile(pct(t.valeur), label || ind.label, detail(t, ind)) : "";
+  const tCertif = k => taux(certif, byKey["nd:" + k]);
+  const tuiles = [
+    somme(ls, "entres") != null ? tuile(nb(somme(ls, "entres")), "Stagiaires formés", `${ls.length} formation${ls.length > 1 ? "s" : ""}`) : "",
+    somme(ls, "enCours") ? tuile(nb(somme(ls, "enCours")), "Stagiaires en cours de formation", "Résultats publiés à l'issue des parcours") : "",
+    tuileSi(a("satisfaction"), byKey["nd:satisfaction"]),
+    note ? tuile(`${note.valeur.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}/10`, "Note moyenne de satisfaction", `${nb(note.n)} répondants`) : "",
+    tuileSi(a("realisation"), byKey["nd:realisation"]),
+    tuileSi(a("abandon"), byKey["nd:abandon"]),
+    tuileSi(tCertif("obtention"), byKey["nd:obtention"], "Taux d'obtention des certifications"),
+    tuileSi(tCertif("presentation"), byKey["nd:presentation"], "Taux de présentation à la certification"),
+    tuileSi(a("retourSat"), byKey["nd:retourSat"]),
+  ].join("");
+
+  const lignesTab = ls.map(l => {
+    const metiers = (l.metiersVises || "").split(/\n|;/).map(s => s.trim()).filter(Boolean);
+    const fiche = l.codeFiche ? (l.lienFiche ? `<a href="${esc(l.lienFiche)}" target="_blank" rel="noopener">${esc(l.codeFiche)} <i class="bx bx-link-external"></i></a>` : esc(l.codeFiche)) : "";
     return `<tr>
       <th scope="row"><strong>${esc(l.formation)}</strong>
         <div class="rc-tags">${l.type ? `<span class="rc-tag">${esc(l.type)}</span>` : ""}${l.modalite ? `<span class="rc-tag rc-tag-light">${esc(l.modalite)}</span>` : ""}</div>
@@ -187,15 +225,7 @@ function blocND(annee, idx) {
         ${metiers.length ? `<details class="rc-mini"><summary>Métiers visés</summary><ul>${metiers.map(m => `<li>${esc(m)}</li>`).join("")}</ul></details>` : ""}
         ${l.commentaire ? `<div class="rc-det"><i class="bx bx-info-circle"></i> ${esc(l.commentaire)}</div>` : ""}
       </th>
-      <td><span class="rc-val">${l.entres != null ? nb(l.entres) : "–"}</span>${l.enCours ? `<br><span class="rc-det">${l.entres != null ? "dont " : ""}${nb(l.enCours)} en cours</span>` : ""}</td>
-      ${celluleND(l, "satisfaction")}
-      <td>${typeof l.noteSatisfaction === "number" ? `<span class="rc-val">${l.noteSatisfaction.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}/10</span>` : `<span class="rc-nd">n.d.</span>`}</td>
-      ${celluleND(l, "retourSat")}
-      ${celluleND(l, "realisation")}
-      ${celluleND(l, "abandon")}
-      ${celluleND(l, "presentation")}
-      ${celluleND(l, "obtention")}
-      ${ins}
+      ${cols.map(c => c.td(l)).join("\n      ")}
     </tr>`;
   }).join("");
   const causes = ls.flatMap(l => parseCauses(l.causesAbandons));
@@ -203,27 +233,17 @@ function blocND(annee, idx) {
     <div class="features-area pt-70 pb-70" id="non-diplomantes${idx ? "-" + slug(annee) : ""}">
         <div class="container">
             <div class="section-title text-center"><h2>Formations qualifiantes et certifiantes</h2><p>Résultats ${esc(annee)}</p></div>
-            <div class="row pt-40 rc-kpi-clair">
-                ${tuile(somme(ls, "entres") != null ? nb(somme(ls, "entres")) : "–", "Stagiaires formés", `${ls.length} formation${ls.length > 1 ? "s" : ""}`)}
-                ${somme(ls, "enCours") ? tuile(nb(somme(ls, "enCours")), "Stagiaires en cours de formation", "Résultats publiés à l'issue des parcours") : ""}
-                ${tuileND("satisfaction")}
-                ${tuile(note ? `${note.valeur.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}/10` : "–", "Note moyenne de satisfaction", note ? `${nb(note.n)} répondants` : "Donnée non disponible")}
-                ${tuileND("realisation")}
-                ${tuileND("abandon")}
-                ${certif.length ? tuileND("obtention", "Taux d'obtention des certifications", certif) : ""}
-                ${certif.length ? tuileND("presentation", "Taux de présentation à la certification", certif) : ""}
-                ${tuileND("retourSat")}
-            </div>
+            <div class="row pt-40 rc-kpi-clair">${tuiles}</div>
             <div class="table-responsive pt-40">
                 <table class="rc-table rc-nd-table">
-                    <thead><tr><th>Formation</th><th>Stagiaires</th><th>Satisfaction</th><th>Note</th><th>Retour questionnaires</th><th>Réalisation des heures</th><th>Abandon</th><th>Présentation certification</th><th>Obtention certification</th><th>Insertion des titulaires</th></tr></thead>
+                    <thead><tr><th>Formation</th>${cols.map(c => `<th>${c.titre}</th>`).join("")}</tr></thead>
                     <tbody>${lignesTab}</tbody>
                 </table>
             </div>
             ${causes.length ? `<div class="rc-formation">${causesHtml(causes, `Causes des abandons – formations qualifiantes et certifiantes ${esc(annee)}`)}</div>` : ""}
         </div>
     </div>`;
-  if (idx === 0) return contenu;
+  if (idx === 0 || annee === premiereAnneeComplete) return contenu;
   return `<details class="rc-archive container"><summary>Consulter les résultats ${esc(annee)} des formations qualifiantes et certifiantes</summary>${contenu}</details>`;
 }
 
@@ -241,6 +261,7 @@ const methodologie = `
                 <thead><tr><th>Indicateur</th><th>Mode de calcul</th><th>Source des données</th></tr></thead>
                 <tbody>${INDICATEURS_ND.map(i => `<tr><th scope="row">${i.label}</th><td>${i.calcul}</td><td>${i.source}</td></tr>`).join("")}
                 <tr><th scope="row">Note moyenne de satisfaction</th><td>Moyenne des notes sur 10 de chaque formation, pondérée par le nombre de questionnaires reçus</td><td>Questionnaire de fin de formation (données déclaratives)</td></tr>
+                <tr><th scope="row">Stagiaires formés</th><td>Stagiaires entrés en formation sur l'année ; à défaut, candidats inscrits à la certification</td><td>Suivi administratif des parcours</td></tr>
                 <tr><th scope="row">Insertion des titulaires</th><td>Taux d'insertion global et dans le métier visé des titulaires de la certification</td><td>Fiche de la certification publiée par France compétences</td></tr></tbody>
             </table>
             </div>
