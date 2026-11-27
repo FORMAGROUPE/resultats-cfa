@@ -271,14 +271,14 @@ const inserjeunes = `
     </div>`;
 
 const html = head({
-  title: `Nos résultats – ${config.nomCfa} | Indicateurs de l'apprentissage`,
+  title: `Nos résultats – OF / CFA ${config.nomEtablissement} | Indicateurs de résultats et de performance`,
   description: `Taux de satisfaction, d'obtention, d'insertion, de poursuite d'études, d'abandon et de rupture des apprentis du ${config.nomCfa}, avec leurs modalités de calcul.`,
   url: config.urlPublique, gtm: config.googleTagManagerId,
 }) + nav + `
     <div class="page-title-area page-title-area3">
         <div class="container">
             <div class="page-title-content">
-                <h1>Nos résultats<br>${esc(config.nomCfa)}<br><span>Les indicateurs de l'apprentissage</span></h1>
+                <h1>Nos résultats<br>OF / CFA ${esc(config.nomEtablissement)}<br><span>Les indicateurs de résultats et de performance</span></h1>
             </div>
         </div>
     </div>
@@ -289,7 +289,7 @@ const html = head({
                 <h2>"Des résultats publiés en toute transparence"</h2>
             </div>
             <div class="row justify-content-center pt-40"><div class="col-lg-10">
-                <p>${esc(config.nomEtablissement)} publie chaque année les résultats de ses formations en apprentissage, formation par formation : satisfaction des apprentis, réussite aux examens, déroulement des parcours et devenir des apprentis après leur formation. Le mode de calcul de chaque indicateur est détaillé en <a href="#methodologie">fin de page</a>.</p>
+                <p>${esc(config.nomEtablissement)} publie chaque année les résultats de ses formations diplômantes ou certifiantes, formation par formation : satisfaction des apprentis et des stagiaires, réussite aux examens, déroulement des parcours et devenir des apprentis et des stagiaires après leur formation. Le mode de calcul de chaque indicateur est détaillé en <a href="#methodologie">fin de page</a>.</p>
                 ${nd.length ? `<p>Les résultats des formations qualifiantes et certifiantes sont présentés <a href="#non-diplomantes">dans une section dédiée</a>.</p>` : ""}
                 <p class="rc-maj"><i class="bx bx-calendar"></i> Dernière mise à jour : <strong>${dateFr(majIso)}</strong>${sessions[0] ? ` · Session présentée : <strong>${esc(sessions[0])}</strong>` : ""}</p>
             </div></div>
