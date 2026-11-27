@@ -50,6 +50,7 @@ export const FIELDS_ND = {
   codeFiche:            { notion: "Code RS ou RNCP", type: "rich_text" },
   lienFiche:            { notion: "Lien fiche France compétences", type: "url" },
   entres:               { notion: "Stagiaires entrés", type: "number" },
+  enCours:              { notion: "Nombre d'inscrits en cours de formation", type: "number", facultatif: true },
   abandons:             { notion: "Abandons", type: "number" },
   causesAbandons:       { notion: "Causes des abandons", type: "rich_text" },
   heuresPrevues:        { notion: "Heures de formation prévues", type: "number" },
@@ -72,7 +73,7 @@ export function fromNotionPage(page, fields = FIELDS) {
   const out = { id: page.id, derniereModification: page.last_edited_time, _manquantes: [] };
   for (const [key, def] of Object.entries(fields)) {
     const p = page.properties?.[def.notion];
-    if (!p) { out[key] = null; out._manquantes.push(def.notion); continue; }
+    if (!p) { out[key] = null; if (!def.facultatif) out._manquantes.push(def.notion); continue; }
     switch (p.type) {
       case "title":
       case "rich_text":
